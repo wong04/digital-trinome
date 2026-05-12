@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Billotti Trinome</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <canvas id="canvas"></canvas>
+
+  <!-- ── Always-visible bottom bar ─────────────────────────────────────────── -->
+  <div class="bottom-bar">
+    <span class="brand">ONLINE <span class="brand-model">TRINOME</span></span>
+    <button class="start-btn" id="start-btn">START</button>
+    <button class="drawer-toggle" id="drawer-toggle" aria-label="Open settings">&#9650;</button>
+  </div>
+
+  <!-- ── Slide-up settings drawer ──────────────────────────────────────────── -->
+  <div class="drawer" id="drawer">
+    <div class="drawer-inner">
+
+      <!-- ── Voice 0: BELL ── -->
+      <div class="voice" data-voice="0">
+        <div class="voice-top">
+          <div class="voice-identity">
+            <span class="voice-label">BELL</span>
+          </div>
+          <div class="voice-actions">
+            <button class="mute-btn" data-voice="0">ON</button>
+          </div>
+        </div>
+        <div class="voice-control fixed-row">
+          <div class="slider-wrap">
+            <input class="slider" type="range" min="10" max="240" value="60" data-voice="0" />
+            <div class="scale" data-voice="0"></div>
+          </div>
+        </div>
+        <div class="voice-footer">
+          <div class="readout" title="Click to edit BPM">
+            <span class="bpm-label">BPM</span>
+            <span class="bpm-display" id="bpm-0">60</span>
+            <input class="bpm-input hidden" id="bpm-input-0" type="number" min="10" max="240" value="60" data-voice="0" />
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Voice 1: BEAT 1 ── -->
+      <div class="voice" data-voice="1">
+        <div class="voice-top">
+          <div class="voice-identity">
+            <span class="voice-label">BEAT 1</span>
+          </div>
+          <div class="voice-actions">
+            <div class="mode-toggle">
+              <button class="mode-btn active" data-voice="1" data-mode="fixed">FIXED</button>
+              <button class="mode-btn" data-voice="1" data-mode="ratio">RATIO</button>
+            </div>
+            <button class="mute-btn" data-voice="1">ON</button>
+          </div>
+        </div>
+        <div class="voice-control fixed-row" data-for="1">
+          <div class="slider-wrap">
+            <input class="slider" type="range" min="10" max="240" value="80" data-voice="1" />
+            <div class="scale" data-voice="1"></div>
+          </div>
+        </div>
+        <div class="voice-control ratio-row hidden" data-for="1">
+          <select class="ratio-select" data-voice="1">
+            <option value="4:1">4 : 1 — quadruple</option>
+            <option value="3:1">3 : 1 — triple</option>
+            <option value="2:1">2 : 1 — double</option>
+            <option value="5:3">5 : 3</option>
+            <option value="4:3">4 : 3</option>
+            <option value="3:2" selected>3 : 2 — triplet</option>
+            <option value="5:4">5 : 4</option>
+            <option value="6:5">6 : 5</option>
+            <option value="1:1">1 : 1 — unison</option>
+            <option value="5:6">5 : 6</option>
+            <option value="4:5">4 : 5</option>
+            <option value="3:4">3 : 4</option>
+            <option value="2:3">2 : 3</option>
+            <option value="1:2">1 : 2 — half</option>
+            <option value="1:3">1 : 3 — third</option>
+            <option value="7:4">7 : 4</option>
+            <option value="7:8">7 : 8</option>
+          </select>
+        </div>
+        <div class="voice-footer">
+          <div class="readout" title="Click to edit BPM">
+            <span class="bpm-label">BPM</span>
+            <span class="bpm-display" id="bpm-1">80</span>
+            <input class="bpm-input hidden" id="bpm-input-1" type="number" min="10" max="240" value="80" data-voice="1" />
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Voice 2: BEAT 2 ── -->
+      <div class="voice" data-voice="2">
+        <div class="voice-top">
+          <div class="voice-identity">
+            <span class="voice-label">BEAT 2</span>
+          </div>
+          <div class="voice-actions">
+            <div class="mode-toggle">
+              <button class="mode-btn active" data-voice="2" data-mode="fixed">FIXED</button>
+              <button class="mode-btn" data-voice="2" data-mode="ratio">RATIO</button>
+            </div>
+            <button class="mute-btn" data-voice="2">ON</button>
+          </div>
+        </div>
+        <div class="voice-control fixed-row" data-for="2">
+          <div class="slider-wrap">
+            <input class="slider" type="range" min="10" max="240" value="120" data-voice="2" />
+            <div class="scale" data-voice="2"></div>
+          </div>
+        </div>
+        <div class="voice-control ratio-row hidden" data-for="2">
+          <select class="ratio-select" data-voice="2">
+            <option value="4:1">4 : 1 — quadruple</option>
+            <option value="3:1">3 : 1 — triple</option>
+            <option value="2:1" selected>2 : 1 — double</option>
+            <option value="5:3">5 : 3</option>
+            <option value="4:3">4 : 3</option>
+            <option value="3:2">3 : 2 — triplet</option>
+            <option value="5:4">5 : 4</option>
+            <option value="6:5">6 : 5</option>
+            <option value="1:1">1 : 1 — unison</option>
+            <option value="5:6">5 : 6</option>
+            <option value="4:5">4 : 5</option>
+            <option value="3:4">3 : 4</option>
+            <option value="2:3">2 : 3</option>
+            <option value="1:2">1 : 2 — half</option>
+            <option value="1:3">1 : 3 — third</option>
+            <option value="7:4">7 : 4</option>
+            <option value="7:8">7 : 8</option>
+          </select>
+        </div>
+        <div class="voice-footer">
+          <div class="readout" title="Click to edit BPM">
+            <span class="bpm-label">BPM</span>
+            <span class="bpm-display" id="bpm-2">120</span>
+            <input class="bpm-input hidden" id="bpm-input-2" type="number" min="10" max="240" value="120" data-voice="2" />
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="trinome.js"></script>
+</body>
+</html>

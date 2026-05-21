@@ -17,7 +17,16 @@
   <div class="bottom-bar">
     <span class="brand">ONLINE <span class="brand-model">TRINOME</span></span>
     <button class="start-btn" id="start-btn">START</button>
-    <button class="drawer-toggle" id="drawer-toggle" aria-label="Open settings">&#9650;</button>
+    <div class="bar-right">
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">&#9790;</button>
+      <button class="palette-btn" id="palette-btn" aria-label="Open palette">
+        <span class="palette-dot" data-voice="0"></span>
+        <span class="palette-dot" data-voice="1"></span>
+        <span class="palette-dot" data-voice="2"></span>
+      </button>
+      <button class="side-toggle" id="side-toggle" aria-label="Open scenes &amp; keys">&#9000;</button>
+      <button class="drawer-toggle" id="drawer-toggle" aria-label="Open settings">&#9650;</button>
+    </div>
   </div>
 
   <!-- ── Slide-up settings drawer ──────────────────────────────────────────── -->
@@ -151,6 +160,36 @@
 
     </div>
   </div>
+
+  <!-- ── Side drawer: scenes & keyboard bindings ──────────────────────────── -->
+  <div class="side-drawer" id="side-drawer">
+    <div class="side-drawer-inner">
+      <section class="side-section">
+        <div class="side-heading-row">
+          <h3 class="side-heading">scenes</h3>
+          <span class="side-hint">shift + key to capture</span>
+        </div>
+        <div class="scene-grid" id="scene-grid"></div>
+      </section>
+      <section class="side-section">
+        <div class="side-heading-row">
+          <h3 class="side-heading">presets</h3>
+          <span class="side-hint">click value to edit</span>
+        </div>
+        <div class="presets-list" id="presets-list"></div>
+      </section>
+      <section class="side-section">
+        <div class="side-heading-row">
+          <h3 class="side-heading">bindings</h3>
+          <span class="side-hint">click chip to remap</span>
+        </div>
+        <div class="bindings-list" id="bindings-list"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ── Palette popover ──────────────────────────────────────────────────── -->
+  <div class="palette-popover" id="palette-popover" hidden></div>
 
   <script src="trinome.js"></script>
 </body>

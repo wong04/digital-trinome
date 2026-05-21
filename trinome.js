@@ -348,11 +348,54 @@ function closeEdit(idx) {
   bpmInputEls[idx].addEventListener('blur', () => commitEdit(idx));
 });
 
+// ── State setters (single source of truth used by mouse, keyboard, scenes) ──
+
+function updateSliderFill(idx) {
+  const slider = sliderEls[idx];
+  const pct = (slider.value - BPM_MIN) / (BPM_MAX - BPM_MIN) * 100;
+  slider.style.setProperty('--fill-pct', pct + '%');
+}
+
+function setBpm(idx, bpm) {
+  const v = clampBpm(bpm);
+  voices[idx].bpm = v;
+  sliderEls[idx].value = v;
+  updateSliderFill(idx);
+  refreshDisplay(idx);
+  if (idx === 0) refreshRatioDisplays();
+}
+
+function setMute(idx, muted) {
+  voices[idx].muted = muted;
+  const btn = document.querySelector(`.mute-btn[data-voice="${idx}"]`);
+  btn.textContent = muted ? 'MUTE' : 'ON';
+  btn.classList.toggle('muted', muted);
+  voiceEls[idx].classList.toggle('muted', muted);
+}
+
+function setRatioMode(idx, isRatio) {
+  if (idx === 0) return;
+  voices[idx].ratioMode = isRatio;
+  document.querySelectorAll(`.mode-btn[data-voice="${idx}"]`).forEach(b => {
+    b.classList.toggle('active', (b.dataset.mode === 'ratio') === isRatio);
+  });
+  document.querySelector(`.fixed-row[data-for="${idx}"]`).classList.toggle('hidden', isRatio);
+  document.querySelector(`.ratio-row[data-for="${idx}"]`).classList.toggle('hidden', !isRatio);
+  refreshDisplay(idx);
+}
+
+function setRatio(idx, n, d) {
+  voices[idx].ratio = { n, d };
+  const sel = document.querySelector(`.ratio-select[data-voice="${idx}"]`);
+  if (sel) sel.value = `${n}:${d}`;
+  refreshDisplay(idx);
+}
+
 // ── UI wiring ─────────────────────────────────────────────────────────────────
 
 const startBtn = document.getElementById('start-btn');
 
-startBtn.addEventListener('click', () => {
+function toggleTransport() {
   if (running) {
     stopScheduler();
     startBtn.textContent = 'START';
@@ -362,21 +405,14 @@ startBtn.addEventListener('click', () => {
     startBtn.textContent = 'STOP';
     startBtn.classList.add('running');
   }
-});
+}
+
+startBtn.addEventListener('click', toggleTransport);
 
 // BPM sliders
 sliderEls.forEach((slider, idx) => {
-  const updateFill = () => {
-    const pct = (slider.value - BPM_MIN) / (BPM_MAX - BPM_MIN) * 100;
-    slider.style.setProperty('--fill-pct', pct + '%');
-  };
-  updateFill();
-  const update = () => {
-    voices[idx].bpm = clampBpm(parseInt(slider.value, 10));
-    refreshDisplay(idx);
-    if (idx === 0) refreshRatioDisplays();
-    updateFill();
-  };
+  updateSliderFill(idx);
+  const update = () => setBpm(idx, parseInt(slider.value, 10));
   slider.addEventListener('input',  update);
   slider.addEventListener('change', update);
 });
@@ -385,40 +421,25 @@ sliderEls.forEach((slider, idx) => {
 document.querySelectorAll('.mode-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const idx  = parseInt(btn.dataset.voice, 10);
-    const mode = btn.dataset.mode;
-    voices[idx].ratioMode = (mode === 'ratio');
-
-    btn.closest('.mode-toggle').querySelectorAll('.mode-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.mode === mode);
-    });
-
-    document.querySelector(`.fixed-row[data-for="${idx}"]`).classList.toggle('hidden', mode === 'ratio');
-    document.querySelector(`.ratio-row[data-for="${idx}"]`).classList.toggle('hidden', mode === 'fixed');
-
-    refreshDisplay(idx);
+    setRatioMode(idx, btn.dataset.mode === 'ratio');
   });
 });
 
 // Ratio selects
 document.querySelectorAll('.ratio-select').forEach(sel => {
   const idx = parseInt(sel.dataset.voice, 10);
-  const init = () => {
+  const [n0, d0] = sel.value.split(':').map(Number);
+  voices[idx].ratio = { n: n0, d: d0 };
+  sel.addEventListener('change', () => {
     const [n, d] = sel.value.split(':').map(Number);
-    voices[idx].ratio = { n, d };
-  };
-  init();
-  sel.addEventListener('change', () => { init(); refreshDisplay(idx); });
+    setRatio(idx, n, d);
+  });
 });
 
 // Mute buttons
 document.querySelectorAll('.mute-btn').forEach(btn => {
   const idx = parseInt(btn.dataset.voice, 10);
-  btn.addEventListener('click', () => {
-    voices[idx].muted = !voices[idx].muted;
-    btn.textContent = voices[idx].muted ? 'MUTE' : 'ON';
-    btn.classList.toggle('muted', voices[idx].muted);
-    voiceEls[idx].classList.toggle('muted', voices[idx].muted);
-  });
+  btn.addEventListener('click', () => setMute(idx, !voices[idx].muted));
 });
 
 // Drawer toggle
@@ -430,4 +451,592 @@ drawerToggle.addEventListener('click', () => {
   drawerToggle.classList.toggle('open', isOpen);
   drawerToggle.setAttribute('aria-label', isOpen ? 'Close settings' : 'Open settings');
   if (isOpen) requestAnimationFrame(() => requestAnimationFrame(buildAllScales));
+});
+
+// ── Side drawer toggle (scenes & keys) ──────────────────────────────────────
+
+const sideDrawerEl = document.getElementById('side-drawer');
+const sideToggle   = document.getElementById('side-toggle');
+
+sideToggle.addEventListener('click', () => {
+  const isOpen = sideDrawerEl.classList.toggle('open');
+  sideToggle.classList.toggle('open', isOpen);
+  sideToggle.setAttribute('aria-label', isOpen ? 'Close scenes & keys' : 'Open scenes & keys');
+});
+
+// ── Storage helpers ─────────────────────────────────────────────────────────
+
+function loadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return fallback;
+    return JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function saveJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* quota */ }
+}
+
+// ── Action set & default bindings ───────────────────────────────────────────
+
+const VOICE_LABELS = ['BELL', 'BEAT 1', 'BEAT 2'];
+
+const ACTIONS = [
+  { id: 'transport', group: 'transport', label: 'start / stop' },
+  { id: 'mute0',     group: 'mutes',     label: 'mute bell' },
+  { id: 'mute1',     group: 'mutes',     label: 'mute beat 1' },
+  { id: 'mute2',     group: 'mutes',     label: 'mute beat 2' },
+  // voice 0 presets
+  { id: 'v0p0', group: 'bell presets',   label: 'bell · slot 1' },
+  { id: 'v0p1', group: 'bell presets',   label: 'bell · slot 2' },
+  { id: 'v0p2', group: 'bell presets',   label: 'bell · slot 3' },
+  { id: 'v0p3', group: 'bell presets',   label: 'bell · slot 4' },
+  // voice 1 presets
+  { id: 'v1p0', group: 'beat 1 presets', label: 'beat 1 · slot 1' },
+  { id: 'v1p1', group: 'beat 1 presets', label: 'beat 1 · slot 2' },
+  { id: 'v1p2', group: 'beat 1 presets', label: 'beat 1 · slot 3' },
+  { id: 'v1p3', group: 'beat 1 presets', label: 'beat 1 · slot 4' },
+  // voice 2 presets
+  { id: 'v2p0', group: 'beat 2 presets', label: 'beat 2 · slot 1' },
+  { id: 'v2p1', group: 'beat 2 presets', label: 'beat 2 · slot 2' },
+  { id: 'v2p2', group: 'beat 2 presets', label: 'beat 2 · slot 3' },
+  { id: 'v2p3', group: 'beat 2 presets', label: 'beat 2 · slot 4' },
+  // scenes recall
+  { id: 'scene0', group: 'scenes',  label: 'recall scene 1' },
+  { id: 'scene1', group: 'scenes',  label: 'recall scene 2' },
+  { id: 'scene2', group: 'scenes',  label: 'recall scene 3' },
+  { id: 'scene3', group: 'scenes',  label: 'recall scene 4' },
+  // scenes capture
+  { id: 'cap0', group: 'capture scenes', label: 'capture scene 1' },
+  { id: 'cap1', group: 'capture scenes', label: 'capture scene 2' },
+  { id: 'cap2', group: 'capture scenes', label: 'capture scene 3' },
+  { id: 'cap3', group: 'capture scenes', label: 'capture scene 4' },
+];
+
+const DEFAULT_BINDINGS = {
+  transport: 'Space',
+  mute0: 'KeyQ', mute1: 'KeyW', mute2: 'KeyE',
+  v0p0: 'KeyR', v0p1: 'KeyT', v0p2: 'KeyY', v0p3: 'KeyU',
+  v1p0: 'KeyF', v1p1: 'KeyG', v1p2: 'KeyH', v1p3: 'KeyJ',
+  v2p0: 'KeyV', v2p1: 'KeyB', v2p2: 'KeyN', v2p3: 'KeyM',
+  scene0: 'Digit1', scene1: 'Digit2', scene2: 'Digit3', scene3: 'Digit4',
+  cap0: 'Shift+Digit1', cap1: 'Shift+Digit2', cap2: 'Shift+Digit3', cap3: 'Shift+Digit4',
+};
+
+const DEFAULT_PRESETS = [
+  [60,  80,  100, 120],
+  [80,  120, 160, 200],
+  [100, 140, 180, 220],
+];
+
+let bindings = Object.assign({}, DEFAULT_BINDINGS, loadJSON('trinome.bindings', {}));
+let presets  = loadJSON('trinome.presets', DEFAULT_PRESETS);
+let scenes   = loadJSON('trinome.scenes',  [null, null, null, null]);
+
+function persistBindings() { saveJSON('trinome.bindings', bindings); }
+function persistPresets()  { saveJSON('trinome.presets',  presets); }
+function persistScenes()   { saveJSON('trinome.scenes',   scenes); }
+
+// ── Palette & theme ─────────────────────────────────────────────────────────
+
+const PALETTES = {
+  signal: { name: 'signal', colors: [[255,190,60], [60,210,180], [255,90,110]] },
+  sunset: { name: 'sunset', colors: [[255,140,70], [245,90,140], [130,80,200]] },
+  ocean:  { name: 'ocean',  colors: [[70,200,230], [80,150,255], [130,100,240]] },
+  forest: { name: 'forest', colors: [[200,220,90], [90,200,140], [50,160,180]] },
+  mono:   { name: 'mono',   colors: [[220,220,220], [170,170,170], [110,110,120]] },
+};
+
+let paletteState = loadJSON('trinome.palette', PALETTES.signal);
+let themeState   = loadJSON('trinome.theme', null);
+if (themeState !== 'light' && themeState !== 'dark') {
+  themeState = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function applyPalette(p, { persist = true } = {}) {
+  paletteState = p;
+  for (let i = 0; i < 3; i++) {
+    const rgb = p.colors[i].join(', ');
+    document.documentElement.style.setProperty('--c' + i, rgb);
+    RING_COLORS[i] = rgb;
+  }
+  if (persist) saveJSON('trinome.palette', p);
+  if (typeof renderPalettePopover === 'function') renderPalettePopover();
+}
+
+function applyTheme(theme, { persist = true } = {}) {
+  themeState = theme;
+  document.body.dataset.theme = theme;
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = theme === 'light' ? '☀' : '☾'; // ☀ / ☾
+  if (persist) saveJSON('trinome.theme', theme);
+}
+
+// Apply palette and theme immediately (before further DOM rendering uses CSS vars)
+applyPalette(paletteState, { persist: false });
+applyTheme(themeState, { persist: false });
+
+// ── Action functions ────────────────────────────────────────────────────────
+
+function applyPreset(voiceIdx, presetIdx) {
+  const val = presets[voiceIdx]?.[presetIdx];
+  if (typeof val !== 'number') return;
+  // jumping to a fixed BPM also exits ratio mode (typed-BPM edit does this too)
+  if (voices[voiceIdx].ratioMode) setRatioMode(voiceIdx, false);
+  setBpm(voiceIdx, val);
+  flashVoicePanel(voiceIdx);
+}
+
+function captureScene(slot) {
+  scenes[slot] = {
+    voices: voices.map(v => ({
+      bpm: v.bpm,
+      muted: v.muted,
+      ratioMode: v.ratioMode,
+      ratio: { n: v.ratio.n, d: v.ratio.d },
+    })),
+  };
+  persistScenes();
+  renderScenes();
+  flashSceneCard(slot, 'capture');
+}
+
+function recallScene(slot) {
+  const s = scenes[slot];
+  if (!s) return;
+  s.voices.forEach((sv, i) => {
+    setRatio(i, sv.ratio.n, sv.ratio.d);
+    setRatioMode(i, sv.ratioMode);
+    setBpm(i, sv.bpm);
+    setMute(i, sv.muted);
+  });
+  flashSceneCard(slot, 'recall');
+}
+
+const actionFns = {
+  transport: toggleTransport,
+  mute0: () => setMute(0, !voices[0].muted),
+  mute1: () => setMute(1, !voices[1].muted),
+  mute2: () => setMute(2, !voices[2].muted),
+};
+for (let vi = 0; vi < 3; vi++) {
+  for (let pi = 0; pi < 4; pi++) {
+    actionFns[`v${vi}p${pi}`] = () => applyPreset(vi, pi);
+  }
+}
+for (let si = 0; si < 4; si++) {
+  actionFns[`scene${si}`] = () => recallScene(si);
+  actionFns[`cap${si}`]   = () => captureScene(si);
+}
+
+// ── Keyboard router ─────────────────────────────────────────────────────────
+
+let chordToAction = new Map();
+
+function rebuildChordMap() {
+  chordToAction = new Map();
+  for (const [actionId, chord] of Object.entries(bindings)) {
+    if (chord) chordToAction.set(chord, actionId);
+  }
+}
+rebuildChordMap();
+
+function isEditableFocus(el) {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+let rebindMode = null; // { actionId, chipEl } when active
+
+function chordFromEvent(e) {
+  if (e.ctrlKey || e.altKey || e.metaKey) return null; // ignore OS-conflicting modifiers
+  return (e.shiftKey ? 'Shift+' : '') + e.code;
+}
+
+function prettyChord(chord) {
+  if (!chord) return '—';
+  return chord
+    .replace('Shift+', '⇧ ')
+    .replace(/^Key/, '')
+    .replace(/^Digit/, '')
+    .replace(/^Space$/, 'space')
+    .toLowerCase();
+}
+
+window.addEventListener('keydown', e => {
+  if (rebindMode) {
+    if (e.key === 'Escape') {
+      cancelRebind();
+      e.preventDefault();
+      return;
+    }
+    // ignore pure modifier keypresses
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' ||
+        e.code === 'ControlLeft' || e.code === 'ControlRight' ||
+        e.code === 'AltLeft' || e.code === 'AltRight' ||
+        e.code === 'MetaLeft' || e.code === 'MetaRight') return;
+    const chord = chordFromEvent(e);
+    if (!chord) return;
+    e.preventDefault();
+    commitRebind(chord);
+    return;
+  }
+
+  if (isEditableFocus(e.target)) return;
+
+  const chord = chordFromEvent(e);
+  if (!chord) return;
+  const actionId = chordToAction.get(chord);
+  if (!actionId) return;
+  e.preventDefault();
+  actionFns[actionId]();
+});
+
+// ── Visual flash helpers ────────────────────────────────────────────────────
+
+const voiceFlashTimers = [null, null, null];
+function flashVoicePanel(idx) {
+  const el = voiceEls[idx];
+  if (!el) return;
+  el.classList.add('flash-key');
+  clearTimeout(voiceFlashTimers[idx]);
+  voiceFlashTimers[idx] = setTimeout(() => el.classList.remove('flash-key'), 110);
+}
+
+const sceneFlashTimers = [null, null, null, null];
+function flashSceneCard(slot, kind) {
+  const card = document.querySelector(`.scene-card[data-slot="${slot}"]`);
+  if (!card) return;
+  const cls = kind === 'capture' ? 'flash-capture' : 'flash-recall';
+  card.classList.add(cls);
+  clearTimeout(sceneFlashTimers[slot]);
+  sceneFlashTimers[slot] = setTimeout(() => card.classList.remove(cls), 220);
+}
+
+// ── Side drawer rendering ───────────────────────────────────────────────────
+
+const sceneGridEl   = document.getElementById('scene-grid');
+const presetsListEl = document.getElementById('presets-list');
+const bindingsEl    = document.getElementById('bindings-list');
+
+function renderScenes() {
+  sceneGridEl.innerHTML = '';
+  scenes.forEach((s, slot) => {
+    const card = document.createElement('div');
+    card.className = 'scene-card' + (s ? '' : ' empty');
+    card.dataset.slot = slot;
+
+    const head = document.createElement('div');
+    head.className = 'scene-card-head';
+    const num = document.createElement('span');
+    num.className = 'scene-card-num';
+    num.textContent = `scene ${slot + 1}`;
+    head.appendChild(num);
+    const recallKeyChip = makeKeyChip(`scene${slot}`);
+    head.appendChild(recallKeyChip);
+    card.appendChild(head);
+
+    if (s) {
+      const preview = document.createElement('div');
+      preview.className = 'scene-preview';
+      s.voices.forEach((sv, i) => {
+        const pip = document.createElement('span');
+        pip.className = 'scene-pip' + (sv.muted ? ' muted' : '');
+        pip.dataset.voice = i;
+        pip.innerHTML = `<span class="scene-pip-dot"></span><span class="scene-pip-val">${Math.round(sv.bpm)}</span>`;
+        preview.appendChild(pip);
+      });
+      card.appendChild(preview);
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'scene-empty-label';
+      empty.textContent = 'empty';
+      card.appendChild(empty);
+    }
+
+    const foot = document.createElement('div');
+    foot.className = 'scene-card-foot';
+    const capBtn = document.createElement('button');
+    capBtn.className = 'scene-capture-btn';
+    capBtn.textContent = 'capture';
+    capBtn.addEventListener('click', e => { e.stopPropagation(); captureScene(slot); });
+    foot.appendChild(capBtn);
+    const capChip = makeKeyChip(`cap${slot}`);
+    foot.appendChild(capChip);
+    card.appendChild(foot);
+
+    card.addEventListener('click', () => { if (scenes[slot]) recallScene(slot); });
+    sceneGridEl.appendChild(card);
+  });
+}
+
+function renderPresets() {
+  presetsListEl.innerHTML = '';
+  for (let vi = 0; vi < 3; vi++) {
+    const row = document.createElement('div');
+    row.className = 'presets-row';
+    row.dataset.voice = vi;
+
+    const label = document.createElement('span');
+    label.className = 'presets-row-label';
+    label.textContent = VOICE_LABELS[vi].toLowerCase();
+    row.appendChild(label);
+
+    for (let pi = 0; pi < 4; pi++) {
+      const slot = document.createElement('div');
+      slot.className = 'preset-slot';
+
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.className = 'preset-slot-val';
+      input.min = BPM_MIN;
+      input.max = BPM_MAX;
+      input.value = presets[vi][pi];
+      input.addEventListener('change', () => {
+        const v = clampBpm(parseInt(input.value, 10) || presets[vi][pi]);
+        presets[vi][pi] = v;
+        input.value = v;
+        persistPresets();
+      });
+      slot.appendChild(input);
+
+      const key = document.createElement('span');
+      key.className = 'preset-slot-key';
+      key.textContent = prettyChord(bindings[`v${vi}p${pi}`]);
+      slot.appendChild(key);
+
+      row.appendChild(slot);
+    }
+    presetsListEl.appendChild(row);
+  }
+}
+
+function makeKeyChip(actionId) {
+  const chip = document.createElement('button');
+  chip.className = 'key-chip';
+  chip.dataset.actionId = actionId;
+  chip.textContent = prettyChord(bindings[actionId]);
+  chip.addEventListener('click', e => {
+    e.stopPropagation();
+    beginRebind(actionId, chip);
+  });
+  return chip;
+}
+
+function renderBindings() {
+  bindingsEl.innerHTML = '';
+  const groups = {};
+  ACTIONS.forEach(a => {
+    if (!groups[a.group]) groups[a.group] = [];
+    groups[a.group].push(a);
+  });
+  Object.entries(groups).forEach(([groupName, actions]) => {
+    const g = document.createElement('div');
+    g.className = 'bindings-group';
+    const title = document.createElement('div');
+    title.className = 'bindings-group-title';
+    title.textContent = groupName;
+    g.appendChild(title);
+    actions.forEach(a => {
+      const row = document.createElement('div');
+      row.className = 'binding-row';
+      const lab = document.createElement('span');
+      lab.className = 'binding-label';
+      lab.textContent = a.label;
+      row.appendChild(lab);
+      row.appendChild(makeKeyChip(a.id));
+      g.appendChild(row);
+    });
+    bindingsEl.appendChild(g);
+  });
+}
+
+function refreshAllChips() {
+  // re-render the parts that show binding chips
+  renderScenes();
+  renderPresets();
+  renderBindings();
+}
+
+// ── Rebind mode ─────────────────────────────────────────────────────────────
+
+function beginRebind(actionId, chipEl) {
+  if (rebindMode) cancelRebind();
+  rebindMode = { actionId, chipEl };
+  chipEl.classList.add('capturing');
+  chipEl.textContent = 'press a key…';
+}
+
+function cancelRebind() {
+  if (!rebindMode) return;
+  rebindMode.chipEl.classList.remove('capturing');
+  rebindMode.chipEl.textContent = prettyChord(bindings[rebindMode.actionId]);
+  rebindMode = null;
+}
+
+function commitRebind(chord) {
+  if (!rebindMode) return;
+  // If chord already bound to another action, clear that binding to avoid duplicates
+  const existing = chordToAction.get(chord);
+  if (existing && existing !== rebindMode.actionId) {
+    bindings[existing] = '';
+  }
+  bindings[rebindMode.actionId] = chord;
+  rebindMode.chipEl.classList.remove('capturing');
+  rebindMode = null;
+  persistBindings();
+  rebuildChordMap();
+  refreshAllChips();
+}
+
+// Initial render
+renderScenes();
+renderPresets();
+renderBindings();
+
+// ── Theme toggle wiring ─────────────────────────────────────────────────────
+
+const themeBtn = document.getElementById('theme-toggle');
+themeBtn.textContent = themeState === 'light' ? '☀' : '☾';
+themeBtn.addEventListener('click', () => {
+  applyTheme(themeState === 'light' ? 'dark' : 'light');
+});
+
+// ── Palette popover wiring ──────────────────────────────────────────────────
+
+const paletteBtn      = document.getElementById('palette-btn');
+const palettePopover  = document.getElementById('palette-popover');
+let   popoverOpen     = false;
+
+function paletteRgbToHex(rgb) {
+  const [r, g, b] = rgb;
+  return '#' + [r, g, b].map(n => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0')).join('');
+}
+
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function renderPalettePopover() {
+  palettePopover.innerHTML = '';
+  const presets = Object.values(PALETTES);
+  const currentName = paletteState.name;
+
+  presets.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'palette-row' + (currentName === p.name ? ' active' : '');
+    const sw = document.createElement('div');
+    sw.className = 'palette-row-swatches';
+    p.colors.forEach(c => {
+      const dot = document.createElement('span');
+      dot.className = 'palette-row-swatch';
+      dot.style.background = `rgb(${c.join(',')})`;
+      sw.appendChild(dot);
+    });
+    row.appendChild(sw);
+    const name = document.createElement('span');
+    name.className = 'palette-row-name';
+    name.textContent = p.name;
+    row.appendChild(name);
+    if (currentName === p.name) {
+      const check = document.createElement('span');
+      check.className = 'palette-row-check';
+      check.textContent = '✓';
+      row.appendChild(check);
+    }
+    row.addEventListener('click', () => {
+      applyPalette({ name: p.name, colors: p.colors.map(c => c.slice()) });
+      closePopover();
+    });
+    palettePopover.appendChild(row);
+  });
+
+  // Custom row (header)
+  const customRow = document.createElement('div');
+  customRow.className = 'palette-row' + (currentName === 'custom' ? ' active' : '');
+  const csw = document.createElement('div');
+  csw.className = 'palette-row-swatches';
+  paletteState.colors.forEach(c => {
+    const dot = document.createElement('span');
+    dot.className = 'palette-row-swatch';
+    dot.style.background = `rgb(${c.join(',')})`;
+    csw.appendChild(dot);
+  });
+  customRow.appendChild(csw);
+  const cname = document.createElement('span');
+  cname.className = 'palette-row-name';
+  cname.textContent = 'custom';
+  customRow.appendChild(cname);
+  if (currentName === 'custom') {
+    const check = document.createElement('span');
+    check.className = 'palette-row-check';
+    check.textContent = '✓';
+    customRow.appendChild(check);
+  }
+  customRow.addEventListener('click', () => {
+    if (currentName !== 'custom') {
+      applyPalette({ name: 'custom', colors: paletteState.colors.map(c => c.slice()) });
+    }
+  });
+  palettePopover.appendChild(customRow);
+
+  // 3 color pickers
+  const pickerWrap = document.createElement('div');
+  pickerWrap.className = 'palette-custom-pickers';
+  VOICE_LABELS.forEach((label, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'palette-picker-cell';
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.value = paletteRgbToHex(paletteState.colors[i]);
+    input.addEventListener('input', () => {
+      const rgb = hexToRgb(input.value);
+      if (!rgb) return;
+      const newColors = paletteState.colors.map(c => c.slice());
+      newColors[i] = rgb;
+      applyPalette({ name: 'custom', colors: newColors });
+    });
+    const cap = document.createElement('label');
+    cap.textContent = label.toLowerCase();
+    cell.appendChild(input);
+    cell.appendChild(cap);
+    pickerWrap.appendChild(cell);
+  });
+  palettePopover.appendChild(pickerWrap);
+}
+
+function openPopover() {
+  popoverOpen = true;
+  palettePopover.hidden = false;
+  paletteBtn.classList.add('open');
+  renderPalettePopover();
+}
+
+function closePopover() {
+  popoverOpen = false;
+  palettePopover.hidden = true;
+  paletteBtn.classList.remove('open');
+}
+
+paletteBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  if (popoverOpen) closePopover(); else openPopover();
+});
+
+document.addEventListener('click', e => {
+  if (!popoverOpen) return;
+  if (palettePopover.contains(e.target) || paletteBtn.contains(e.target)) return;
+  closePopover();
+});
+
+document.addEventListener('keydown', e => {
+  if (popoverOpen && e.key === 'Escape') closePopover();
 });

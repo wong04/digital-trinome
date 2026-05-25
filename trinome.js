@@ -238,6 +238,8 @@ const bpmDisplays = [0, 1, 2].map(i => document.getElementById(`bpm-${i}`));
 const bpmInputEls = [0, 1, 2].map(i => document.getElementById(`bpm-input-${i}`));
 const sliderEls   = [0, 1, 2].map(i => document.querySelector(`.slider[data-voice="${i}"]`));
 const voiceEls    = [0, 1, 2].map(i => document.querySelector(`.voice[data-voice="${i}"]`));
+const paletteBtn     = document.getElementById('palette-btn');
+const palettePopover = document.getElementById('palette-popover');
 
 function refreshDisplay(idx) {
   const bpm = effectiveBpm(idx);
@@ -445,23 +447,42 @@ document.querySelectorAll('.mute-btn').forEach(btn => {
 // Drawer toggle
 const drawerEl     = document.getElementById('drawer');
 const drawerToggle = document.getElementById('drawer-toggle');
+const sideDrawerEl = document.getElementById('side-drawer');
+const sideToggle   = document.getElementById('side-toggle');
+
+function closeDrawer() {
+  drawerEl.classList.remove('open');
+  drawerToggle.classList.remove('open');
+  drawerToggle.setAttribute('aria-label', 'Open settings');
+}
+
+function closeSideDrawer() {
+  sideDrawerEl.classList.remove('open');
+  sideToggle.classList.remove('open');
+  sideToggle.setAttribute('aria-label', 'Open scenes & keys');
+}
 
 drawerToggle.addEventListener('click', () => {
   const isOpen = drawerEl.classList.toggle('open');
   drawerToggle.classList.toggle('open', isOpen);
   drawerToggle.setAttribute('aria-label', isOpen ? 'Close settings' : 'Open settings');
-  if (isOpen) requestAnimationFrame(() => requestAnimationFrame(buildAllScales));
+  if (isOpen) {
+    closeSideDrawer();
+    if (typeof closePopover === 'function') closePopover();
+    requestAnimationFrame(() => requestAnimationFrame(buildAllScales));
+  }
 });
 
 // ── Side drawer toggle (scenes & keys) ──────────────────────────────────────
-
-const sideDrawerEl = document.getElementById('side-drawer');
-const sideToggle   = document.getElementById('side-toggle');
 
 sideToggle.addEventListener('click', () => {
   const isOpen = sideDrawerEl.classList.toggle('open');
   sideToggle.classList.toggle('open', isOpen);
   sideToggle.setAttribute('aria-label', isOpen ? 'Close scenes & keys' : 'Open scenes & keys');
+  if (isOpen) {
+    closeDrawer();
+    if (typeof closePopover === 'function') closePopover();
+  }
 });
 
 // ── Storage helpers ─────────────────────────────────────────────────────────
@@ -909,9 +930,7 @@ themeBtn.addEventListener('click', () => {
 
 // ── Palette popover wiring ──────────────────────────────────────────────────
 
-const paletteBtn      = document.getElementById('palette-btn');
-const palettePopover  = document.getElementById('palette-popover');
-let   popoverOpen     = false;
+let popoverOpen = false;
 
 function paletteRgbToHex(rgb) {
   const [r, g, b] = rgb;
@@ -1017,6 +1036,8 @@ function openPopover() {
   popoverOpen = true;
   palettePopover.hidden = false;
   paletteBtn.classList.add('open');
+  closeDrawer();
+  closeSideDrawer();
   renderPalettePopover();
 }
 

@@ -67,6 +67,7 @@ let rings = [];
 function resizeCanvas() {
   canvas.width  = window.innerWidth;
   canvas.height = window.innerHeight;
+  rings.length = 0; // H3: clear stale ring positions
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
@@ -99,6 +100,7 @@ function spawnRing(voiceIdx, isSync) {
   if (!pos) return;
   const minDim = Math.min(canvas.width, canvas.height);
   rings.push({
+    voice:       voiceIdx,
     cx:          pos.x,
     cy:          pos.y,
     color:       RING_COLORS[voiceIdx],
@@ -154,7 +156,8 @@ const voices = [
 function effectiveBpm(idx) {
   const v = voices[idx];
   if (idx > 0 && v.ratioMode) {
-    return voices[0].bpm * v.ratio.n / v.ratio.d;
+    const d = v.ratio.d || 1; // M4: guard against zero denominator
+    return voices[0].bpm * v.ratio.n / d;
   }
   return v.bpm;
 }
@@ -218,8 +221,9 @@ function schedule() {
 }
 
 function startScheduler() {
+  if (timerId !== null) return; // C1: prevent duplicate intervals on rapid toggle
   const ctx = getCtx();
-  if (ctx.state === 'suspended') ctx.resume();
+  if (ctx.state === 'suspended') ctx.resume(); // H1: best-effort resume
   const now = ctx.currentTime;
   voices.forEach(v => { v.nextTime = now + 0.05; });
   timerId = setInterval(schedule, SCHEDULE_MS);
@@ -293,7 +297,12 @@ function buildAllScales() {
 }
 
 requestAnimationFrame(() => requestAnimationFrame(buildAllScales));
-new ResizeObserver(buildAllScales).observe(document.querySelector('.drawer'));
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+new ResizeObserver(debounce(buildAllScales, 60)).observe(document.querySelector('.drawer')); // M3
 
 // ── BPM click-to-edit ─────────────────────────────────────────────────────────
 
@@ -369,6 +378,7 @@ function setBpm(idx, bpm) {
 
 function setMute(idx, muted) {
   voices[idx].muted = muted;
+  rings = rings.filter(r => r.voice !== idx); // M2: clear in-flight rings for this voice
   const btn = document.querySelector(`.mute-btn[data-voice="${idx}"]`);
   btn.textContent = muted ? 'MUTE' : 'ON';
   btn.classList.toggle('muted', muted);
@@ -571,7 +581,12 @@ const PALETTES = {
   mono:   { name: 'mono',   colors: [[220,220,220], [170,170,170], [110,110,120]] },
 };
 
-let paletteState = loadJSON('trinome.palette', PALETTES.signal);
+let _rawPalette = loadJSON('trinome.palette', PALETTES.signal);
+// C2: validate palette structure to prevent crash on corrupted localStorage
+if (!_rawPalette || !Array.isArray(_rawPalette.colors) || _rawPalette.colors.length < 3) {
+  _rawPalette = PALETTES.signal;
+}
+let paletteState = _rawPalette;
 let themeState   = loadJSON('trinome.theme', null);
 if (themeState !== 'light' && themeState !== 'dark') {
   themeState = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
@@ -627,13 +642,17 @@ function captureScene(slot) {
 
 function recallScene(slot) {
   const s = scenes[slot];
-  if (!s) return;
+  if (!s || !Array.isArray(s.voices) || s.voices.length !== 3) return; // C3
   s.voices.forEach((sv, i) => {
     setRatio(i, sv.ratio.n, sv.ratio.d);
     setRatioMode(i, sv.ratioMode);
     setBpm(i, sv.bpm);
     setMute(i, sv.muted);
   });
+  if (running) { // H2: re-align nextTime to avoid beat bunching after BPM change
+    const now = getCtx().currentTime;
+    voices.forEach((v, i) => { v.nextTime = now + 60 / effectiveBpm(i); });
+  }
   flashSceneCard(slot, 'recall');
 }
 
@@ -691,16 +710,18 @@ function prettyChord(chord) {
 
 window.addEventListener('keydown', e => {
   if (rebindMode) {
-    if (e.key === 'Escape') {
-      cancelRebind();
-      e.preventDefault();
-      return;
-    }
     // ignore pure modifier keypresses
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' ||
         e.code === 'ControlLeft' || e.code === 'ControlRight' ||
         e.code === 'AltLeft' || e.code === 'AltRight' ||
         e.code === 'MetaLeft' || e.code === 'MetaRight') return;
+    // M1: if Escape pressed without a modifier, cancel rebind (can't bind bare Escape);
+    //     Shift+Escape is a valid bindable chord and falls through to commitRebind.
+    if (e.key === 'Escape' && !e.shiftKey) {
+      cancelRebind();
+      e.preventDefault();
+      return;
+    }
     const chord = chordFromEvent(e);
     if (!chord) return;
     e.preventDefault();
@@ -819,7 +840,7 @@ function renderPresets() {
       input.max = BPM_MAX;
       input.value = presets[vi][pi];
       input.addEventListener('change', () => {
-        const v = clampBpm(parseInt(input.value, 10) || presets[vi][pi]);
+        const v = clampBpm(parseFloat(input.value) || presets[vi][pi]); // H4: was parseInt
         presets[vi][pi] = v;
         input.value = v;
         persistPresets();

@@ -58,6 +58,142 @@ function playTock(time) {
   osc.stop(time + 0.07);
 }
 
+// ── Acoustic synthesis helpers ───────────────────────────────────────────────
+
+function noiseBurst(time, centerFreq, Q, peakGain, attackSec, decaySec) {
+  const ctx = getCtx();
+  const dur = attackSec + decaySec;
+  const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const bpf = ctx.createBiquadFilter();
+  bpf.type = 'bandpass'; bpf.frequency.value = centerFreq; bpf.Q.value = Q;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.linearRampToValueAtTime(peakGain, time + attackSec);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+  src.connect(bpf); bpf.connect(gain); gain.connect(ctx.destination);
+  src.start(time); src.stop(time + dur + 0.01);
+}
+
+function sinePartials(time, partials) {
+  const ctx = getCtx();
+  partials.forEach(({ freq, amp, decay }) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, time);
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.linearRampToValueAtTime(amp, time + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + decay);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(time); osc.stop(time + decay + 0.05);
+  });
+}
+
+// ── Kit: classic ─────────────────────────────────────────────────────────────
+
+function synthBell(time) {
+  sinePartials(time, [
+    { freq: 440,  amp: 0.18, decay: 1.20 },
+    { freq: 1212, amp: 0.11, decay: 0.90 },
+    { freq: 2378, amp: 0.07, decay: 0.60 },
+    { freq: 3930, amp: 0.03, decay: 0.35 },
+  ]);
+}
+function synthWoodHi(time) { noiseBurst(time, 1500, 8, 0.50, 0.001, 0.040); }
+function synthWoodLo(time) { noiseBurst(time,  650, 6, 0.45, 0.001, 0.055); }
+
+// ── Kit: kalimba ─────────────────────────────────────────────────────────────
+
+function synthKalimbaHi(time) {
+  sinePartials(time, [
+    { freq: 440,  amp: 0.20, decay: 0.70 },
+    { freq: 880,  amp: 0.10, decay: 0.45 },
+    { freq: 1320, amp: 0.04, decay: 0.25 },
+  ]);
+}
+function synthKalimbaMid(time) {
+  sinePartials(time, [
+    { freq: 330,  amp: 0.18, decay: 0.70 },
+    { freq: 660,  amp: 0.09, decay: 0.45 },
+    { freq: 990,  amp: 0.03, decay: 0.25 },
+  ]);
+}
+function synthKalimbaLo(time) {
+  sinePartials(time, [
+    { freq: 220,  amp: 0.22, decay: 1.00 },
+    { freq: 440,  amp: 0.10, decay: 0.65 },
+    { freq: 660,  amp: 0.04, decay: 0.35 },
+  ]);
+}
+
+// ── Kit: tabla ───────────────────────────────────────────────────────────────
+
+function synthTablaHi(time) {
+  const ctx = getCtx();
+  const osc = ctx.createOscillator(); const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(380, time);
+  osc.frequency.exponentialRampToValueAtTime(180, time + 0.06);
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.linearRampToValueAtTime(0.38, time + 0.001);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.12);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(time); osc.stop(time + 0.15);
+  noiseBurst(time, 2200, 5, 0.15, 0.001, 0.012);
+}
+function synthTablaMid(time) {
+  const ctx = getCtx();
+  const osc = ctx.createOscillator(); const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(260, time);
+  osc.frequency.exponentialRampToValueAtTime(120, time + 0.08);
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.linearRampToValueAtTime(0.36, time + 0.001);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.15);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(time); osc.stop(time + 0.18);
+  noiseBurst(time, 1400, 4, 0.12, 0.001, 0.015);
+}
+function synthTablaLo(time) {
+  const ctx = getCtx();
+  const osc = ctx.createOscillator(); const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(160, time);
+  osc.frequency.exponentialRampToValueAtTime(70, time + 0.10);
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.linearRampToValueAtTime(0.40, time + 0.001);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.18);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(time); osc.stop(time + 0.22);
+}
+
+// ── Kit: marimba ─────────────────────────────────────────────────────────────
+
+function synthMarimbaHi(time) {
+  sinePartials(time, [
+    { freq: 523,  amp: 0.20, decay: 0.45 },
+    { freq: 2092, amp: 0.08, decay: 0.20 },
+    { freq: 5230, amp: 0.03, decay: 0.10 },
+  ]);
+}
+function synthMarimbaMid(time) {
+  sinePartials(time, [
+    { freq: 392,  amp: 0.20, decay: 0.55 },
+    { freq: 1568, amp: 0.08, decay: 0.25 },
+    { freq: 3920, amp: 0.03, decay: 0.12 },
+  ]);
+}
+function synthMarimbaLo(time) {
+  sinePartials(time, [
+    { freq: 261,  amp: 0.22, decay: 0.70 },
+    { freq: 1044, amp: 0.09, decay: 0.30 },
+    { freq: 2610, amp: 0.03, decay: 0.15 },
+  ]);
+}
+
 // ── Canvas animation ─────────────────────────────────────────────────────────
 
 const canvas   = document.getElementById('canvas');
@@ -244,6 +380,8 @@ const sliderEls   = [0, 1, 2].map(i => document.querySelector(`.slider[data-voic
 const voiceEls    = [0, 1, 2].map(i => document.querySelector(`.voice[data-voice="${i}"]`));
 const paletteBtn     = document.getElementById('palette-btn');
 const palettePopover = document.getElementById('palette-popover');
+const kitBtn         = document.getElementById('kit-btn');
+const kitPopover     = document.getElementById('kit-popover');
 
 function refreshDisplay(idx) {
   const bpm = effectiveBpm(idx);
@@ -479,6 +617,7 @@ drawerToggle.addEventListener('click', () => {
   if (isOpen) {
     closeSideDrawer();
     if (typeof closePopover === 'function') closePopover();
+    if (typeof closeKitPopover === 'function') closeKitPopover();
     requestAnimationFrame(() => requestAnimationFrame(buildAllScales));
   }
 });
@@ -492,6 +631,7 @@ sideToggle.addEventListener('click', () => {
   if (isOpen) {
     closeDrawer();
     if (typeof closePopover === 'function') closePopover();
+    if (typeof closeKitPopover === 'function') closeKitPopover();
   }
 });
 
@@ -571,6 +711,26 @@ function persistBindings() { saveJSON('trinome.bindings', bindings); }
 function persistPresets()  { saveJSON('trinome.presets',  presets); }
 function persistScenes()   { saveJSON('trinome.scenes',   scenes); }
 
+// ── Sound kits ───────────────────────────────────────────────────────────────
+
+const KITS = {
+  classic: { name: 'classic', desc: 'bell  ·  wood hi  ·  wood lo',     fns: [synthBell,      synthWoodHi,    synthWoodLo]    },
+  kalimba: { name: 'kalimba', desc: 'kalimba hi  ·  mid  ·  lo',        fns: [synthKalimbaHi, synthKalimbaMid, synthKalimbaLo] },
+  tabla:   { name: 'tabla',   desc: 'hand drum hi  ·  mid  ·  lo',      fns: [synthTablaHi,   synthTablaMid,  synthTablaLo]   },
+  marimba: { name: 'marimba', desc: 'marimba C5  ·  G4  ·  C4',         fns: [synthMarimbaHi, synthMarimbaMid, synthMarimbaLo] },
+};
+
+let kitState = loadJSON('trinome.kit', 'classic');
+if (!KITS[kitState]) kitState = 'classic';
+
+function applyKit(kitId, { persist = true } = {}) {
+  kitState = kitId;
+  const kit = KITS[kitId];
+  voices.forEach((v, i) => { v.fn = kit.fns[i]; });
+  if (persist) saveJSON('trinome.kit', kitId);
+  if (typeof renderKitPopover === 'function') renderKitPopover();
+}
+
 // ── Palette & theme ─────────────────────────────────────────────────────────
 
 const PALETTES = {
@@ -611,9 +771,10 @@ function applyTheme(theme, { persist = true } = {}) {
   if (persist) saveJSON('trinome.theme', theme);
 }
 
-// Apply palette and theme immediately (before further DOM rendering uses CSS vars)
+// Apply palette, theme, and kit on boot
 applyPalette(paletteState, { persist: false });
 applyTheme(themeState, { persist: false });
+applyKit(kitState, { persist: false });
 
 // ── Action functions ────────────────────────────────────────────────────────
 
@@ -1059,6 +1220,7 @@ function openPopover() {
   paletteBtn.classList.add('open');
   closeDrawer();
   closeSideDrawer();
+  if (typeof closeKitPopover === 'function') closeKitPopover();
   renderPalettePopover();
 }
 
@@ -1074,11 +1236,66 @@ paletteBtn.addEventListener('click', e => {
 });
 
 document.addEventListener('click', e => {
-  if (!popoverOpen) return;
-  if (palettePopover.contains(e.target) || paletteBtn.contains(e.target)) return;
-  closePopover();
+  if (popoverOpen && !palettePopover.contains(e.target) && !paletteBtn.contains(e.target)) closePopover();
+  if (kitPopoverOpen && !kitPopover.contains(e.target) && !kitBtn.contains(e.target)) closeKitPopover();
 });
 
 document.addEventListener('keydown', e => {
   if (popoverOpen && e.key === 'Escape') closePopover();
+  if (kitPopoverOpen && e.key === 'Escape') closeKitPopover();
+});
+
+// ── Sound kit popover wiring ─────────────────────────────────────────────────
+
+let kitPopoverOpen = false;
+
+function renderKitPopover() {
+  kitPopover.innerHTML = '';
+  Object.values(KITS).forEach(kit => {
+    const row = document.createElement('div');
+    row.className = 'kit-row' + (kitState === kit.name ? ' active' : '');
+    const text = document.createElement('div');
+    text.className = 'kit-row-text';
+    const name = document.createElement('span');
+    name.className = 'kit-row-name';
+    name.textContent = kit.name;
+    const desc = document.createElement('span');
+    desc.className = 'kit-row-desc';
+    desc.textContent = kit.desc;
+    text.appendChild(name);
+    text.appendChild(desc);
+    row.appendChild(text);
+    if (kitState === kit.name) {
+      const check = document.createElement('span');
+      check.className = 'kit-row-check';
+      check.textContent = '✓';
+      row.appendChild(check);
+    }
+    row.addEventListener('click', () => {
+      applyKit(kit.name);
+      closeKitPopover();
+    });
+    kitPopover.appendChild(row);
+  });
+}
+
+function openKitPopover() {
+  kitPopoverOpen = true;
+  kitPopover.hidden = false;
+  kitBtn.classList.add('open');
+  closeDrawer();
+  closeSideDrawer();
+  closePopover();
+  renderKitPopover();
+}
+
+function closeKitPopover() {
+  kitPopoverOpen = false;
+  kitPopover.hidden = true;
+  kitBtn.classList.remove('open');
+}
+
+kitBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  if (kitPopoverOpen) closeKitPopover(); else openKitPopover();
 });

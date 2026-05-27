@@ -531,14 +531,52 @@ function setRatioMode(idx, isRatio) {
   });
   document.querySelector(`.fixed-row[data-for="${idx}"]`).classList.toggle('hidden', isRatio);
   document.querySelector(`.ratio-row[data-for="${idx}"]`).classList.toggle('hidden', !isRatio);
+  if (isRatio) syncRatioSelectUI(idx);
   refreshDisplay(idx);
 }
 
 function setRatio(idx, n, d) {
   voices[idx].ratio = { n, d };
-  const sel = document.querySelector(`.ratio-select[data-voice="${idx}"]`);
-  if (sel) sel.value = `${n}:${d}`;
+  syncRatioSelectUI(idx);
   refreshDisplay(idx);
+}
+
+function ratioMatchesPreset(n, d, voiceIdx) {
+  const sel = document.querySelector(`.ratio-select[data-voice="${voiceIdx}"]`);
+  if (!sel) return false;
+  return Array.from(sel.options).some(opt => opt.value === `${n}:${d}`);
+}
+
+function syncRatioSelectUI(voiceIdx) {
+  const v = voices[voiceIdx];
+  const sel = document.querySelector(`.ratio-select[data-voice="${voiceIdx}"]`);
+  const customRow = document.querySelector(`.ratio-custom-row[data-for="${voiceIdx}"]`);
+  if (!sel || !customRow) return;
+  if (ratioMatchesPreset(v.ratio.n, v.ratio.d, voiceIdx)) {
+    sel.value = `${v.ratio.n}:${v.ratio.d}`;
+    customRow.classList.add('hidden');
+  } else {
+    sel.value = 'custom';
+    document.querySelector(`.ratio-n-input[data-voice="${voiceIdx}"]`).value = v.ratio.n;
+    document.querySelector(`.ratio-d-input[data-voice="${voiceIdx}"]`).value = v.ratio.d;
+    customRow.classList.remove('hidden');
+  }
+}
+
+function applyCustomRatio(voiceIdx) {
+  const nInput  = document.querySelector(`.ratio-n-input[data-voice="${voiceIdx}"]`);
+  const dInput  = document.querySelector(`.ratio-d-input[data-voice="${voiceIdx}"]`);
+  const errSpan = document.querySelector(`.ratio-error[data-for="${voiceIdx}"]`);
+  const n = parseInt(nInput.value, 10);
+  const d = parseInt(dInput.value, 10);
+  const valid = Number.isInteger(n) && Number.isInteger(d) && n >= 1 && d >= 1 && n <= 99 && d <= 99;
+  nInput.classList.toggle('error', !valid);
+  dInput.classList.toggle('error', !valid);
+  errSpan.classList.toggle('hidden', valid);
+  if (!valid) { errSpan.textContent = 'enter two integers 1–99'; return; }
+  errSpan.textContent = '';
+  voices[voiceIdx].ratio = { n, d };
+  refreshDisplay(voiceIdx);
 }
 
 // ── UI wiring ─────────────────────────────────────────────────────────────────
@@ -581,9 +619,24 @@ document.querySelectorAll('.ratio-select').forEach(sel => {
   const [n0, d0] = sel.value.split(':').map(Number);
   voices[idx].ratio = { n: n0, d: d0 };
   sel.addEventListener('change', () => {
-    const [n, d] = sel.value.split(':').map(Number);
-    setRatio(idx, n, d);
+    const customRow = document.querySelector(`.ratio-custom-row[data-for="${idx}"]`);
+    if (sel.value === 'custom') {
+      customRow.classList.remove('hidden');
+      document.querySelector(`.ratio-n-input[data-voice="${idx}"]`).focus();
+    } else {
+      customRow.classList.add('hidden');
+      const [n, d] = sel.value.split(':').map(Number);
+      voices[idx].ratio = { n, d };
+      refreshDisplay(idx);
+    }
   });
+});
+
+// Custom ratio inputs
+document.querySelectorAll('.ratio-n-input, .ratio-d-input').forEach(input => {
+  const voiceIdx = parseInt(input.dataset.voice, 10);
+  input.addEventListener('change', () => applyCustomRatio(voiceIdx));
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') applyCustomRatio(voiceIdx); });
 });
 
 // Mute buttons

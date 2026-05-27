@@ -98,7 +98,16 @@
             <option value="1:3">1 : 3 — third</option>
             <option value="7:4">7 : 4</option>
             <option value="7:8">7 : 8</option>
+            <option value="custom">custom…</option>
           </select>
+          <div class="ratio-custom-row hidden" data-for="1">
+            <div class="ratio-custom-inputs">
+              <input class="ratio-n-input" type="number" min="1" max="99" step="1" data-voice="1" value="3" aria-label="Numerator" />
+              <span class="ratio-colon">:</span>
+              <input class="ratio-d-input" type="number" min="1" max="99" step="1" data-voice="1" value="2" aria-label="Denominator" />
+            </div>
+            <span class="ratio-error hidden" data-for="1"></span>
+          </div>
         </div>
         <div class="voice-footer">
           <div class="readout" title="Click to edit BPM">
@@ -148,7 +157,16 @@
             <option value="1:3">1 : 3 — third</option>
             <option value="7:4">7 : 4</option>
             <option value="7:8">7 : 8</option>
+            <option value="custom">custom…</option>
           </select>
+          <div class="ratio-custom-row hidden" data-for="2">
+            <div class="ratio-custom-inputs">
+              <input class="ratio-n-input" type="number" min="1" max="99" step="1" data-voice="2" value="2" aria-label="Numerator" />
+              <span class="ratio-colon">:</span>
+              <input class="ratio-d-input" type="number" min="1" max="99" step="1" data-voice="2" value="1" aria-label="Denominator" />
+            </div>
+            <span class="ratio-error hidden" data-for="2"></span>
+          </div>
         </div>
         <div class="voice-footer">
           <div class="readout" title="Click to edit BPM">

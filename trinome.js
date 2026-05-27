@@ -9,59 +9,99 @@ function getCtx() {
   return audioCtx;
 }
 
+let reverbSend = null;
+
+function getReverb() {
+  const ctx = getCtx();
+  if (reverbSend) return reverbSend;
+
+  const sr  = ctx.sampleRate;
+  const len = Math.floor(sr * 1.4);
+  const ir  = ctx.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch);
+    for (let i = 0; i < len; i++)
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+  }
+
+  const conv = ctx.createConvolver();
+  conv.buffer = ir;
+
+  reverbSend = ctx.createGain();
+  reverbSend.gain.value = 0.12;
+  reverbSend.connect(conv);
+  conv.connect(ctx.destination);
+
+  return reverbSend;
+}
+
 function playBell(time) {
   const ctx = getCtx();
-  [[880, 0.30], [1320, 0.18], [2200, 0.08]].forEach(([freq, amp]) => {
+  const rev = getReverb();
+  // Inharmonic partials of a struck metal bell (tabletop desk bell character)
+  [[1200, 0.40], [3000, 0.15], [5400, 0.06]].forEach(([freq, amp]) => {
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, time);
     gain.gain.setValueAtTime(0.0001, time);
-    gain.gain.linearRampToValueAtTime(amp, time + 0.003);
-    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.55);
+    gain.gain.linearRampToValueAtTime(amp, time + 0.0005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.40);
     osc.connect(gain);
     gain.connect(ctx.destination);
+    gain.connect(rev);
     osc.start(time);
-    osc.stop(time + 0.6);
+    osc.stop(time + 0.45);
   });
+  // Metal strike impact
+  noiseBurst(time, 2500, 8, 0.08, 0.0005, 0.003);
 }
 
 function playTick(time) {
   const ctx  = getCtx();
+  const rev  = getReverb();
+  // Sharp click transient
+  noiseBurst(time, 3000, 5, 0.25, 0.001, 0.015);
+  // Short pitched body
   const osc  = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(900, time);
-  osc.frequency.exponentialRampToValueAtTime(600, time + 0.03);
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(600, time);
   gain.gain.setValueAtTime(0.0001, time);
-  gain.gain.linearRampToValueAtTime(0.35, time + 0.002);
-  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.04);
+  gain.gain.linearRampToValueAtTime(0.20, time + 0.001);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.03);
   osc.connect(gain);
   gain.connect(ctx.destination);
+  gain.connect(rev);
   osc.start(time);
-  osc.stop(time + 0.05);
+  osc.stop(time + 0.04);
 }
 
 function playTock(time) {
   const ctx  = getCtx();
+  const rev  = getReverb();
+  // Sharp click transient (lower pitch than tick)
+  noiseBurst(time, 1800, 5, 0.20, 0.001, 0.015);
+  // Short pitched body
   const osc  = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(450, time);
-  osc.frequency.exponentialRampToValueAtTime(280, time + 0.05);
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(400, time);
   gain.gain.setValueAtTime(0.0001, time);
-  gain.gain.linearRampToValueAtTime(0.40, time + 0.002);
-  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.06);
+  gain.gain.linearRampToValueAtTime(0.18, time + 0.001);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.035);
   osc.connect(gain);
   gain.connect(ctx.destination);
+  gain.connect(rev);
   osc.start(time);
-  osc.stop(time + 0.07);
+  osc.stop(time + 0.04);
 }
 
 // ── Acoustic synthesis helpers ───────────────────────────────────────────────
 
 function noiseBurst(time, centerFreq, Q, peakGain, attackSec, decaySec) {
   const ctx = getCtx();
+  const rev = getReverb();
   const dur = attackSec + decaySec;
   const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
   const d = buf.getChannelData(0);
@@ -73,12 +113,15 @@ function noiseBurst(time, centerFreq, Q, peakGain, attackSec, decaySec) {
   gain.gain.setValueAtTime(0.0001, time);
   gain.gain.linearRampToValueAtTime(peakGain, time + attackSec);
   gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
-  src.connect(bpf); bpf.connect(gain); gain.connect(ctx.destination);
+  src.connect(bpf); bpf.connect(gain);
+  gain.connect(ctx.destination);
+  gain.connect(rev);
   src.start(time); src.stop(time + dur + 0.01);
 }
 
 function sinePartials(time, partials) {
   const ctx = getCtx();
+  const rev = getReverb();
   partials.forEach(({ freq, amp, decay }) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -87,7 +130,9 @@ function sinePartials(time, partials) {
     gain.gain.setValueAtTime(0.0001, time);
     gain.gain.linearRampToValueAtTime(amp, time + 0.002);
     gain.gain.exponentialRampToValueAtTime(0.0001, time + decay);
-    osc.connect(gain); gain.connect(ctx.destination);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    gain.connect(rev);
     osc.start(time); osc.stop(time + decay + 0.05);
   });
 }
@@ -349,7 +394,10 @@ function schedule() {
     } else {
       cluster.forEach(k => {
         const vi = pending[k].voiceIdx;
-        if (!voices[vi].muted) voices[vi].fn(t);
+        if (!voices[vi].muted) {
+          if (vi === 0) playBell(t);
+          else voices[vi].fn(t);
+        }
         scheduleRing(vi, t, false);
       });
     }

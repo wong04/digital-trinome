@@ -562,9 +562,18 @@ function setBpm(idx, bpm) {
   if (idx === 0) refreshRatioDisplays();
 }
 
+function nextBellBeat() {
+  const now = getCtx().currentTime;
+  const spb = 60 / effectiveBpm(0);
+  let t = voices[0].nextTime;
+  while (t - spb > now + 0.05) t -= spb;
+  while (t < now + 0.05) t += spb;
+  return t;
+}
+
 function setMute(idx, muted) {
   voices[idx].muted = muted;
-  if (!muted && running) voices[idx].nextTime = getCtx().currentTime + 0.03;
+  if (!muted && running) voices[idx].nextTime = idx === 0 ? getCtx().currentTime + 0.03 : nextBellBeat();
   rings = rings.filter(r => r.voice !== idx); // M2: clear in-flight rings for this voice
   const btn = document.querySelector(`.mute-btn[data-voice="${idx}"]`);
   btn.textContent = muted ? 'MUTE' : 'ON';

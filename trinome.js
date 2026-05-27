@@ -516,6 +516,7 @@ function setBpm(idx, bpm) {
 
 function setMute(idx, muted) {
   voices[idx].muted = muted;
+  if (!muted && running) voices[idx].nextTime = getCtx().currentTime + 0.03;
   rings = rings.filter(r => r.voice !== idx); // M2: clear in-flight rings for this voice
   const btn = document.querySelector(`.mute-btn[data-voice="${idx}"]`);
   btn.textContent = muted ? 'MUTE' : 'ON';
@@ -865,7 +866,7 @@ function recallScene(slot) {
   });
   if (running) { // H2: re-align nextTime to avoid beat bunching after BPM change
     const now = getCtx().currentTime;
-    voices.forEach((v, i) => { v.nextTime = now + 60 / effectiveBpm(i); });
+    voices.forEach((v, i) => { v.nextTime = now + 0.03; });
   }
   flashSceneCard(slot, 'recall');
 }

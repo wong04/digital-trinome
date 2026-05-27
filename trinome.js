@@ -386,18 +386,19 @@ function schedule() {
     const t        = evt.time;
     const voiceSet = new Set(cluster.map(k => pending[k].voiceIdx));
 
-    if (voiceSet.size === 3) {
+    if (voiceSet.has(0)) {
+      // Bell is in this cluster — sync moment (bell + any active beat)
       if (!voices[0].muted) playBell(t);
-      scheduleRing(0, t, true);
-      scheduleRing(1, t, true);
-      scheduleRing(2, t, true);
-    } else {
       cluster.forEach(k => {
         const vi = pending[k].voiceIdx;
-        if (!voices[vi].muted) {
-          if (vi === 0) playBell(t);
-          else voices[vi].fn(t);
-        }
+        if (vi !== 0 && !voices[vi].muted) voices[vi].fn(t);
+        scheduleRing(vi, t, voiceSet.size >= 2);
+      });
+    } else {
+      // No bell — beats playing alone, no sync
+      cluster.forEach(k => {
+        const vi = pending[k].voiceIdx;
+        if (!voices[vi].muted) voices[vi].fn(t);
         scheduleRing(vi, t, false);
       });
     }

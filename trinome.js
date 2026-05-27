@@ -572,17 +572,26 @@ function nextBellBeat() {
   return t;
 }
 
+let comingOutOfFermata = false;
+
 function setMute(idx, muted) {
   voices[idx].muted = muted;
   if (!muted && running) {
-    const anyOtherActive = voices.some((v, i) => i !== idx && !v.muted);
-    if (!anyOtherActive) {
+    if (comingOutOfFermata) {
+      // All voices were off (fermata) — restart immediately, no waiting for sync
       voices[idx].nextTime = getCtx().currentTime + 0.03;
-    } else if (idx !== 0) {
-      voices[idx].nextTime = nextBellBeat();
+    } else {
+      const anyOtherActive = voices.some((v, i) => i !== idx && !v.muted);
+      if (!anyOtherActive) {
+        voices[idx].nextTime = getCtx().currentTime + 0.03;
+      } else if (idx !== 0) {
+        voices[idx].nextTime = nextBellBeat();
+      }
+      // Bell joining active beats: leave nextTime alone — scheduler keeps it phase-locked.
     }
-    // Bell joining active beats: leave nextTime alone — scheduler keeps it phase-locked.
   }
+  if (voices.every(v => v.muted))  comingOutOfFermata = true;
+  else if (voices.every(v => !v.muted)) comingOutOfFermata = false;
   rings = rings.filter(r => r.voice !== idx); // M2: clear in-flight rings for this voice
   const btn = document.querySelector(`.mute-btn[data-voice="${idx}"]`);
   btn.textContent = muted ? 'MUTE' : 'ON';
